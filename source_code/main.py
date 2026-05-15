@@ -12,6 +12,7 @@ from config import FPS, PLAYER_X, PLAYER_O, BOARD_SIZE
 from game.board import Board
 from game.logic import GameLogic
 from ui.pygame_ui import PygameUI
+from game.evaluator import Evaluator
 
 
 def main():
@@ -31,6 +32,7 @@ def main():
     board    = Board()       # Quản lý dữ liệu bàn cờ
     logic    = GameLogic()   # Xử lý luật chơi
     ui       = PygameUI()    # Giao diện pygame
+    evaluator = Evaluator()  # Bộ đánh giá điểm số
     clock    = pygame.time.Clock()
 
     # Trạng thái game
@@ -86,6 +88,10 @@ def main():
 
                 player_name = "X" if current_player == PLAYER_X else "O"
                 print(f"Người chơi {player_name} đặt tại [{row}, {col}]")
+                
+                # Tính toán và in điểm số Heuristic cục bộ
+                score = evaluator.evaluate_local(board.grid, row, col)
+                print(f"   -> Điểm Heuristic: {score:+,d}")
 
                 # Kiểm tra thắng
                 winner, winning_cells = logic.check_winner(board)
