@@ -121,5 +121,5 @@ class Evaluator:
             
             # Cộng dồn điểm của trục này vào tổng điểm chung
             total_score += axis_score
-            print(total_score)
+            
         return total_score

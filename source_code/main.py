@@ -1,5 +1,5 @@
 # ============================================================
-# main.py - Entry point của game Caro (2 người chơi)
+# main.py - Entry point của game Caro (Người chơi vs AI Minimax)
 # ============================================================
 
 import sys
@@ -13,6 +13,7 @@ from game.board import Board
 from game.logic import GameLogic
 from ui.pygame_ui import PygameUI
 from game.evaluator import Evaluator
+from ai.minimax import MinimaxAgent
 
 
 def main():
@@ -20,23 +21,28 @@ def main():
     Hàm chính điều phối toàn bộ game.
 
     Luồng hoạt động:
-    1. Khởi tạo các đối tượng: Board (bàn cờ), GameLogic (luật), PygameUI (giao diện)
+    1. Khởi tạo các đối tượng: Board, GameLogic, PygameUI, Evaluator, và AI (MinimaxAgent).
     2. Vào vòng lặp game loop:
-       a. Xử lý sự kiện (thoát, click chuột, nhấn phím)
-       b. Cập nhật logic (đặt quân, kiểm tra thắng/hòa)
-       c. Vẽ lại toàn bộ màn hình
-       d. Giới hạn FPS
+       a. Lượt AI (nếu đến lượt máy): AI tính nước đi tốt nhất qua thuật toán Minimax và tự đặt cờ.
+       b. Lượt Người chơi: Xử lý sự kiện click chuột.
+       c. Cập nhật logic (kiểm tra thắng/hòa sau mỗi nước).
+       d. Vẽ lại toàn bộ màn hình.
+       e. Giới hạn FPS.
     """
 
     # ── 1. KHỞI TẠO ──────────────────────────────────────────
-    board    = Board()       # Quản lý dữ liệu bàn cờ
-    logic    = GameLogic()   # Xử lý luật chơi
-    ui       = PygameUI()    # Giao diện pygame
-    evaluator = Evaluator()  # Bộ đánh giá điểm số
-    clock    = pygame.time.Clock()
+    board      = Board()       # Quản lý dữ liệu bàn cờ
+    logic      = GameLogic()   # Xử lý luật chơi
+    ui         = PygameUI()    # Giao diện pygame
+    evaluator  = Evaluator()   # Bộ đánh giá điểm số
+    
+    # Khởi tạo AI với độ sâu bằng 3 (đã tối ưu hóa radius=3 để chạy mượt hơn), truyền vào Evaluator
+    ai_agent   = MinimaxAgent(depth=3, evaluator=evaluator)
+    
+    clock      = pygame.time.Clock()
 
-    # Trạng thái game
-    current_player = PLAYER_X   # X đi trước
+    # Trạng thái game ban đầu
+    current_player = PLAYER_X    # Người chơi (X) luôn đi trước
     game_over      = False
     winner         = None        # Người thắng (PLAYER_X / PLAYER_O / None)
     winning_cells  = []          # Các ô tạo nên chuỗi thắng
@@ -46,10 +52,44 @@ def main():
     running = True
     while running:
 
-        # ── 2a. XỬ LÝ SỰ KIỆN ───────────────────────────────
+        # ── 2a. XỬ LÝ LƯỢT AI (MÁY CHƠI) ──────────────────────────
+        # Chỉ kích hoạt nếu game chưa kết thúc và đang là lượt của Máy (PLAYER_O)
+        if not game_over and current_player == PLAYER_O:
+            print("\n🤖 AI đang suy nghĩ...")
+            
+            # (Tùy chọn) Gọi ui.render() 1 lần trước để hiện dòng trạng thái "Lượt O" trước khi AI nghĩ
+            ui.draw_board(board)
+            ui.draw_pieces(board)
+            ui.draw_status_bar(current_player, game_over, winner, is_draw)
+            ui.render()
+            
+            # Lấy tọa độ tốt nhất từ Minimax
+            best_move, _ = ai_agent.get_move(board, logic)
+            
+            if best_move is not None:
+                row, col = best_move
+                board.make_move(row, col, PLAYER_O)
+                print(f"👉 Máy (O) đánh tại tọa độ [{row}, {col}]")
+                
+                # Kiểm tra trạng thái game ngay sau nước cờ của AI
+                winner, winning_cells = logic.check_winner(board)
+                if winner is not None:
+                    game_over = True
+                    print(f"🏆 MÁY (O) ĐÃ THẮNG!")
+                    ui.hover_cell = None
+                elif logic.is_draw(board):
+                    game_over = True
+                    is_draw   = True
+                    print("🤝 HÒA! Bàn cờ đã đầy.")
+                    ui.hover_cell = None
+                else:
+                    # Chuyển lượt lại cho Người
+                    current_player = PLAYER_X
+
+        # ── 2b. XỬ LÝ SỰ KIỆN TỪ BÀN PHÍM/CHUỘT ─────────────────
         for event in pygame.event.get():
 
-            # Nhấn nút X đóng cửa sổ → thoát chương trình
+            # Đóng cửa sổ
             if event.type == pygame.QUIT:
                 running = False
 
@@ -62,68 +102,57 @@ def main():
                     winner         = None
                     winning_cells  = []
                     is_draw        = False
-                    print("--- Ván mới bắt đầu! ---")
+                    print("\n--- Ván mới bắt đầu! (X đi trước) ---")
 
             # Di chuyển chuột → cập nhật hover effect
             if event.type == pygame.MOUSEMOTION:
-                if not game_over:
+                if not game_over and current_player == PLAYER_X:
                     ui.update_hover(event.pos)
 
-            # Click chuột trái → đặt quân
+            # Click chuột trái → Người chơi đặt quân
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                if game_over:
-                    continue  # Không nhận nước đi khi game đã kết thúc
+                # Bỏ qua nếu game đã hết hoặc đang là lượt của Máy
+                if game_over or current_player != PLAYER_X:
+                    continue  
 
-                # Chuyển tọa độ pixel → chỉ số ô trên bàn cờ
+                # Chuyển tọa độ pixel → chỉ số ô
                 row, col = ui.get_row_col_from_mouse(event.pos)
 
-                # Kiểm tra ô có hợp lệ không
                 if not (0 <= row < BOARD_SIZE and 0 <= col < BOARD_SIZE):
-                    continue  # Click ra ngoài bàn cờ
+                    continue  
 
-                # ── 2b. CẬP NHẬT LOGIC ───────────────────────
-                moved = board.make_move(row, col, current_player)
+                # ── CẬP NHẬT LOGIC LƯỢT NGƯỜI CHƠI ───────────────
+                moved = board.make_move(row, col, PLAYER_X)
                 if not moved:
-                    continue  # Ô đã có quân, bỏ qua
-
-                player_name = "X" if current_player == PLAYER_X else "O"
-                print(f"Người chơi {player_name} đặt tại [{row}, {col}]")
+                    continue  # Trùng ô đã đánh, bỏ qua
+                    
+                print(f"\n👤 Người chơi (X) đánh tại [{row}, {col}]")
                 
-                # Tính toán và in điểm số Heuristic cục bộ
-                score = evaluator.evaluate_local(board.grid, row, col)
-                print(f"   -> Điểm Heuristic: {score:+,d}")
-
-                # Kiểm tra thắng
+                # Kiểm tra trạng thái game
                 winner, winning_cells = logic.check_winner(board)
                 if winner is not None:
                     game_over = True
-                    win_name  = "X" if winner == PLAYER_X else "O"
-                    print(f"🏆 Người chơi {win_name} THẮNG!")
-                    ui.hover_cell = None  # Tắt hover khi game kết thúc
-
-                # Kiểm tra hòa (chỉ khi chưa có người thắng)
+                    print(f"🏆 NGƯỜI CHƠI (X) THẮNG!")
+                    ui.hover_cell = None  
                 elif logic.is_draw(board):
                     game_over = True
                     is_draw   = True
                     print("🤝 HÒA! Bàn cờ đã đầy.")
                     ui.hover_cell = None
-
                 else:
-                    # Chuyển lượt: X → O, O → X
-                    current_player = PLAYER_O if current_player == PLAYER_X else PLAYER_X
+                    # Chuyển lượt qua Máy
+                    current_player = PLAYER_O
 
         # ── 2c. VẼ MÀN HÌNH ─────────────────────────────────
-        # Thứ tự vẽ quan trọng: nền → bàn cờ → quân → vạch thắng → thanh trạng thái
-
-        ui.draw_board(board)                           # Vẽ lưới bàn cờ (kèm hover)
-        ui.draw_pieces(board)                          # Vẽ X / O lên các ô
+        ui.draw_board(board)
+        ui.draw_pieces(board)
 
         if game_over and winning_cells:
-            ui.draw_winning_line(winning_cells)        # Vẽ vạch vàng nối chuỗi thắng
+            ui.draw_winning_line(winning_cells)
 
-        ui.draw_status_bar(current_player, game_over, winner, is_draw)  # Thanh trạng thái
+        ui.draw_status_bar(current_player, game_over, winner, is_draw)
 
-        ui.render()                                    # Cập nhật màn hình
+        ui.render()
 
         # ── 2d. GIỚI HẠN FPS ────────────────────────────────
         clock.tick(FPS)
@@ -133,6 +162,5 @@ def main():
     sys.exit()
 
 
-# Điểm vào của chương trình
 if __name__ == "__main__":
     main()

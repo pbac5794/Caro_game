@@ -52,3 +52,39 @@ class Board:
     def reset(self):
         """Đặt lại bàn cờ về trạng thái trống ban đầu."""
         self.grid = [[EMPTY] * self.size for _ in range(self.size)]
+
+    def get_empty_cells(self, radius=2):
+        """
+        Lấy danh sách tọa độ các ô trống NHƯNG CHỈ các ô nằm gần các quân đã đánh (bán kính radius).
+        Giúp AI không đánh những nước vô nghĩa ở góc xa và tiết kiệm thời gian tính toán.
+        Nếu bàn cờ trống trơn, trả về ô chính giữa.
+        """
+        occupied = []
+        for r in range(self.size):
+            for c in range(self.size):
+                if self.grid[r][c] != EMPTY:
+                    occupied.append((r, c))
+                    
+        # Nếu chưa có ai đánh, nước tối ưu nhất luôn là giữa bàn cờ
+        if not occupied:
+            return [(self.size // 2, self.size // 2)]
+            
+        empty_cells = set()
+        for r, c in occupied:
+            # Duyệt các ô xung quanh trong bán kính radius
+            for dr in range(-radius, radius + 1):
+                for dc in range(-radius, radius + 1):
+                    nr, nc = r + dr, c + dc
+                    # Kiểm tra tọa độ hợp lệ và ô đó phải đang trống
+                    if 0 <= nr < self.size and 0 <= nc < self.size:
+                        if self.grid[nr][nc] == EMPTY:
+                            empty_cells.add((nr, nc))
+                            
+        return list(empty_cells)
+
+    def undo_move(self, row: int, col: int):
+        """
+        Rút lại nước đi tại ô (row, col) bằng cách đặt lại thành ô trống.
+        """
+        if 0 <= row < self.size and 0 <= col < self.size:
+            self.grid[row][col] = EMPTY
