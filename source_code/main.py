@@ -72,7 +72,7 @@ def main():
                 print(f"👉 Máy (O) đánh tại tọa độ [{row}, {col}]")
                 
                 # Kiểm tra trạng thái game ngay sau nước cờ của AI
-                winner, winning_cells = logic.check_winner(board)
+                winner, winning_cells = logic.check_winner(board, row, col)
                 if winner is not None:
                     game_over = True
                     print(f"🏆 MÁY (O) ĐÃ THẮNG!")
@@ -129,7 +129,7 @@ def main():
                 print(f"\n👤 Người chơi (X) đánh tại [{row}, {col}]")
                 
                 # Kiểm tra trạng thái game
-                winner, winning_cells = logic.check_winner(board)
+                winner, winning_cells = logic.check_winner(board, row, col)
                 if winner is not None:
                     game_over = True
                     print(f"🏆 NGƯỜI CHƠI (X) THẮNG!")

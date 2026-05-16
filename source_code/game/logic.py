@@ -12,63 +12,55 @@ class GameLogic:
     Tách biệt hoàn toàn với phần giao diện.
     """
 
-    def check_winner(self, board: Board):
+    def check_winner(self, board: Board, last_r: int, last_c: int):
         """
-        Quét toàn bộ bàn cờ để tìm người thắng.
-
-        Thuật toán:
-        - Duyệt từng ô trên bàn cờ.
-        - Từ ô đó, kiểm tra 4 hướng: ngang (→), dọc (↓),
-          chéo chính (↘), chéo phụ (↙).
-        - Nếu tìm thấy WIN_COUNT quân liên tiếp cùng loại
-          thì trả về (player, danh sách ô thắng).
-        - Nếu không có ai thắng, trả về (None, []).
-
-        Trả về: tuple (winner, winning_cells)
-            - winner: PLAYER_X, PLAYER_O, hoặc None
-            - winning_cells: list[(row, col)] các ô tạo nên chuỗi thắng
+        Kiểm tra người thắng bằng cách chỉ quét 4 đường đi qua tọa độ vừa đánh (last_r, last_c).
+        Tối ưu hiệu năng cực lớn.
         """
         grid = board.grid
         size = board.size
 
-        # 4 hướng kiểm tra: (delta_row, delta_col)
         directions = [
-            (0, 1),   # → ngang (phải)
-            (1, 0),   # ↓ dọc (xuống)
-            (1, 1),   # ↘ chéo chính
-            (1, -1),  # ↙ chéo phụ
+            (0, 1),   # Ngang
+            (1, 0),   # Dọc
+            (1, 1),   # Chéo chính
+            (1, -1),  # Chéo phụ
         ]
 
-        for row in range(size):
-            for col in range(size):
-                current = grid[row][col]
+        current = grid[last_r][last_c]
+        if current == EMPTY:
+            return None, []
 
-                # Bỏ qua ô trống
-                if current == EMPTY:
-                    continue
+        for dr, dc in directions:
+            cells = [(last_r, last_c)]
+            
+            # Kiểm tra theo chiều dương
+            for step in range(1, WIN_COUNT):
+                r = last_r + dr * step
+                c = last_c + dc * step
+                if 0 <= r < size and 0 <= c < size and grid[r][c] == current:
+                    cells.append((r, c))
+                else:
+                    break
+            
+            # Kiểm tra theo chiều âm
+            for step in range(1, WIN_COUNT):
+                r = last_r - dr * step
+                c = last_c - dc * step
+                if 0 <= r < size and 0 <= c < size and grid[r][c] == current:
+                    cells.append((r, c))
+                else:
+                    break
 
-                for dr, dc in directions:
-                    # Thu thập WIN_COUNT ô liên tiếp theo hướng (dr, dc)
-                    cells = []
-                    for step in range(WIN_COUNT):
-                        r = row + dr * step
-                        c = col + dc * step
-                        # Kiểm tra vẫn trong bàn cờ và cùng người chơi
-                        if 0 <= r < size and 0 <= c < size and grid[r][c] == current:
-                            cells.append((r, c))
-                        else:
-                            break  # Chuỗi bị đứt, thôi kiểm tra hướng này
+            if len(cells) >= WIN_COUNT:
+                cells.sort()  # Sắp xếp lại tọa độ cho đẹp nếu cần vẽ đường kẻ
+                return current, cells
 
-                    # Nếu tìm đủ WIN_COUNT quân liên tiếp → có người thắng
-                    if len(cells) == WIN_COUNT:
-                        return current, cells  # (người thắng, các ô thắng)
-
-        # Không có ai thắng
         return None, []
 
     def is_draw(self, board: Board) -> bool:
         """
-        Kiểm tra hòa: bàn cờ đầy mà không có người thắng.
+        Kiểm tra hòa: bàn cờ đầy. 
+        (Đã bỏ check_winner bên trong vì luồng chính luôn kiểm tra win trước khi check hòa)
         """
-        winner, _ = self.check_winner(board)
-        return board.is_full() and winner is None
+        return board.is_full()
